@@ -3,9 +3,15 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
+var sha512 = require('js-sha512');
 // const crypto = require("crypto");
 const ejs = require("ejs")
 const app = express();
+
+//hashing using crypto module
+// const { createHmac } = await import('crypto');
+//
+// const hash = createHmac('sha256', process.env.SECRET)
 
 mongoose.connect('mongodb://localhost:27017/userDB');
 
@@ -15,14 +21,6 @@ app.set('views', './views');
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
 
-// crypto.randomBytes(32, function(err, buffer) {
-//     var token32 = buffer.toString('base64');
-// });
-//
-// //64 bytes
-// crypto.randomBytes(64, function(err, buffer) {
-//     var token64 = buffer.toString('base64');
-// });
 
 const userSchema = new mongoose.Schema(
   {username: String,
@@ -30,11 +28,12 @@ const userSchema = new mongoose.Schema(
 );
 
 
+//encryption using env
 // var encKey = process.env.SOME_32BYTE_BASE64_STRING;
 // var sigKey = process.env.SOME_64BYTE_BASE64_STRING;
 
 // userSchema.plugin(encrypt, {encryptionKey: encKey, signingKey: sigKey, excludeFromEncryption: ['username']});
-userSchema.plugin(encrypt, {secret:process.env.SECRET, excludeFromEncryption: ['username']});
+// userSchema.plugin(encrypt, {secret:process.env.SECRET, excludeFromEncryption: ['username']});
 
 const User = mongoose.model("user", userSchema);
 
@@ -53,7 +52,7 @@ app.post("/login", function(req, res) {
     if (err) throw err;
     else {
       if (rs) {
-        if (pw_login === rs.password) {
+        if (sha512(pw_login) === rs.password) {
           res.render("secrets");
         }
         else {
@@ -74,7 +73,7 @@ app.get("/register", function(req, res) {
 app.post("/register", function(req, res) {
   var uname = req.body.username;
   var pw = req.body.password;
-  const newUser = new User({username: uname, password: pw})
+  const newUser = new User({username: uname, password: sha512(pw)})
   newUser.save(function(err, rs) {
     if (err) throw err;
     else{
