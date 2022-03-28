@@ -3,10 +3,14 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
-var sha512 = require('js-sha512');
+const bcrypt = require("bcrypt");
+// const sha512 = require('js-sha512');
 // const crypto = require("crypto");
 const ejs = require("ejs")
 const app = express();
+
+const saltRounds = 10;
+
 
 //hashing using crypto module
 // const { createHmac } = await import('crypto');
@@ -52,17 +56,15 @@ app.post("/login", function(req, res) {
     if (err) throw err;
     else {
       if (rs) {
-        if (sha512(pw_login) === rs.password) {
-          res.render("secrets");
-        }
-        else {
+        bcrypt.compare(pw_login, rs.password, function(err, crypRes){
+          if (crypRes === true) {
+            res.render("secrets");
+          }
+        }) }
+      else {
           res.render("login");
         }
       }
-      else{
-        res.render("register");
-    }
-  }
 })
 });
 
@@ -73,14 +75,17 @@ app.get("/register", function(req, res) {
 app.post("/register", function(req, res) {
   var uname = req.body.username;
   var pw = req.body.password;
-  const newUser = new User({username: uname, password: sha512(pw)})
-  newUser.save(function(err, rs) {
-    if (err) throw err;
-    else{
-      res.render("login")
-    }
+  // const newUser = new User({username: uname, password: sha512(pw)})
+  bcrypt.hash(pw, saltRounds, function(err, hash) {
+    const newUser = new User({username: uname, password: hash})
+    newUser.save(function(err, rs) {
+      if (err) throw err;
+      else{
+        res.render("login")
+      }
+    })
   })
-})
+});
 
 
 app.listen(process.env.PORT || 2200, function(){
