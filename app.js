@@ -4,15 +4,24 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
 const bcrypt = require("bcrypt");
+const findOrCreate = require("mongoose-findorcreate");
 // const sha512 = require('js-sha512');
 // const crypto = require("crypto");
 const ejs = require("ejs")
+
+//security keys
 require('dotenv').config()
 
 // using passport library
 const session = require("express-session");
 const passport = require("passport");
-const passportLocalMongoose = require("passport-local-mongoose")
+const passportLocalMongoose = require("passport-local-mongoose");
+
+//google oauth2.0
+const GoogleStrategy = require( 'passport-google-oauth2' ).Strategy;
+
+//facebook oauth2.0
+const FacebookStrategy = require('passport-facebook');
 
 
 const app = express();
@@ -35,17 +44,50 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// google oauth2.0
+passport.use(new GoogleStrategy({
+    clientID:     process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:2200/auth/google/secrets",
+    passReqToCallback   : true
+  },
+  function(request, accessToken, refreshToken, profile, done) {
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return done(err, user);
+    });
+  }
+));
+
+//facebook oauth
+passport.use(new FacebookStrategy({
+    clientID:     process.env.FB_ID,
+    clientSecret: process.env.FB_SECRET,
+    callbackURL: "http://localhost:2200/auth/facebook/secrets",
+    passReqToCallback   : true
+  },
+  function(request, accessToken, refreshToken, profile, done) {
+    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+      return done(err, user);
+    });
+  }
+));
+
+
 app.set('views', './views');
 app.set("view engine", "ejs");
 
 mongoose.connect('mongodb://localhost:27017/userDB');
 
-const userSchema = new mongoose.Schema(
-  {username: String,
-  password: String,}
+const userSchema = new mongoose.Schema({
+  username: String,
+  password: String,
+  googleId: String,
+  facebookId: String
+  }
 );
 
 userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 
 //encryption using env
 // var encKey = process.env.SOME_32BYTE_BASE64_STRING;
@@ -59,10 +101,52 @@ const User = new mongoose.model("user", userSchema);
 //passport local mongoose
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+// passport.serializeUser(User.serializeUser());
+// passport.deserializeUser(User.deserializeUser());
+
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(user, done) {
+  done(null, user);
+});
 
 
+//google oauth2.0
+app.get('/auth/google',
+  passport.authenticate('google', { scope:
+      [ 'email', 'profile' ] }
+));
+
+app.get( '/auth/google/secrets',
+    passport.authenticate( 'google', {
+        successRedirect: '/secrets',
+        failureRedirect: '/register'
+}));
+
+
+//facebook auth
+app.get('/auth/facebook',
+  passport.authenticate('facebook', { scope:
+      ['email' , 'public_profile' ] }
+));
+
+app.get( '/auth/facebook/secrets',
+    passport.authenticate( 'facebook', {
+        successRedirect: '/secrets',
+        failureRedirect: '/register'
+}));
+//
+// app.get('/oauth2/redirect/facebook',
+//   passport.authenticate('facebook', { failureRedirect: '/login', failureMessage: true }),
+//   function(req, res) {
+//     res.redirect('/secrets');
+//   });
+
+
+
+//own route
 app.get("/", function(req, res) {
   res.render("home");
 });
